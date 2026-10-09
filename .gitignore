@@ -1,0 +1,44 @@
+# Secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+secrets/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+*.egg-info/
+build/
+dist/
+
+# Runtime
+*.log
+logs/
+data/cache/
+data/tmp/
+.pytest_tmp/
+
+# Generated reports（示例报告在 examples/ 目录，单独提交）
+reports/
+
+# Local databases
+*.sqlite
+*.sqlite3
+
+# IDE / OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Private files
+resume/
+简历*

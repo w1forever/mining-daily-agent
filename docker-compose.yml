@@ -1,0 +1,101 @@
+# 矿权日报 Agent —— 四个独立服务
+# 三个 MCP Server（streamable-http）+ Agent API。
+# 启动：docker compose up -d --build
+# 冒烟：docker compose exec agent-api python scripts/smoke_test.py --base http://agent-api:8000 --full
+services:
+  mining-news-mcp:
+    build: .
+    command: ["python", "-m", "mda.servers.mining_news.server", "--transport", "streamable-http", "--host", "0.0.0.0", "--port", "8001"]
+    environment:
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      MDA_ALLOWED_HOSTS: "${MDA_ALLOWED_HOSTS:-mining-news-mcp:8001,mineral-pdf-mcp:8002,lme-price-mcp:8003}"
+      NEWS_CACHE_DIR: /app/data/cache/news
+      NEWS_FEEDS_ENABLED: ${NEWS_FEEDS_ENABLED:-mining.com,australianmining}
+    volumes:
+      - ./data:/app/data
+    healthcheck:
+      test: ["CMD", "python", "-c", "import socket; s=socket.create_connection(('127.0.0.1',8001),5); s.close()"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    restart: unless-stopped
+
+  mineral-pdf-mcp:
+    build: .
+    command: ["python", "-m", "mda.servers.mineral_pdf.server", "--transport", "streamable-http", "--host", "0.0.0.0", "--port", "8002"]
+    environment:
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      MDA_ALLOWED_HOSTS: "${MDA_ALLOWED_HOSTS:-mining-news-mcp:8001,mineral-pdf-mcp:8002,lme-price-mcp:8003}"
+      PDF_CACHE_DIR: /app/data/cache/pdf
+      EXTRACT_CACHE_DIR: /app/data/cache/extract
+      PDF_USE_VLM: ${PDF_USE_VLM:-true}
+      VLM_MODEL: ${VLM_MODEL:-qwen-vl-plus}
+      VLM_BASE_URL: ${VLM_BASE_URL:-https://dashscope.aliyuncs.com/compatible-mode/v1}
+      VLM_API_KEY: ${VLM_API_KEY:-}
+    volumes:
+      - ./data:/app/data
+    healthcheck:
+      test: ["CMD", "python", "-c", "import socket; s=socket.create_connection(('127.0.0.1',8002),5); s.close()"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    restart: unless-stopped
+
+  lme-price-mcp:
+    build: .
+    command: ["python", "-m", "mda.servers.lme_price.server", "--transport", "streamable-http", "--host", "0.0.0.0", "--port", "8003"]
+    environment:
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      MDA_ALLOWED_HOSTS: "${MDA_ALLOWED_HOSTS:-mining-news-mcp:8001,mineral-pdf-mcp:8002,lme-price-mcp:8003}"
+      PRICE_CACHE_DIR: /app/data/cache/price
+      PRICE_CACHE_TTL_HOURS: ${PRICE_CACHE_TTL_HOURS:-6}
+    volumes:
+      - ./data:/app/data
+    healthcheck:
+      test: ["CMD", "python", "-c", "import socket; s=socket.create_connection(('127.0.0.1',8003),5); s.close()"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    restart: unless-stopped
+
+  agent-api:
+    build: .
+    command: ["python", "-m", "mda.api.main"]
+    environment:
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      MDA_ALLOWED_HOSTS: "${MDA_ALLOWED_HOSTS:-mining-news-mcp:8001,mineral-pdf-mcp:8002,lme-price-mcp:8003}"
+      API_HOST: 0.0.0.0
+      API_PORT: 8000
+      MCP_TRANSPORT: http
+      MCP_NEWS_URL: http://mining-news-mcp:8001/mcp
+      MCP_PDF_URL: http://mineral-pdf-mcp:8002/mcp
+      MCP_PRICE_URL: http://lme-price-mcp:8003/mcp
+      MCP_CALL_TIMEOUT_SECONDS: ${MCP_CALL_TIMEOUT_SECONDS:-120}
+      TASK_TIMEOUT_SECONDS: ${TASK_TIMEOUT_SECONDS:-600}
+      LLM_PROVIDER: ${LLM_PROVIDER:-openai_compatible}
+      LLM_BASE_URL: ${LLM_BASE_URL:-https://dashscope.aliyuncs.com/compatible-mode/v1}
+      LLM_MODEL: ${LLM_MODEL:-qwen-plus}
+      LLM_API_KEY: ${LLM_API_KEY:-}
+      REPORTS_DIR: /app/reports
+    volumes:
+      - ./data:/app/data
+      - ./reports:/app/reports
+    ports:
+      - "8000:8000"
+    depends_on:
+      mining-news-mcp:
+        condition: service_healthy
+      mineral-pdf-mcp:
+        condition: service_healthy
+      lme-price-mcp:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=5)"]
+      interval: 20s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+    restart: unless-stopped

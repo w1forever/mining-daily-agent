@@ -1,0 +1,12 @@
+.venv/
+.pytest_tmp/
+__pycache__/
+*.pyc
+.git/
+.env
+data/cache/
+reports/
+tests/fixtures/ni43_101_sample.pdf
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
